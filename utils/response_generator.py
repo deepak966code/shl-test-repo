@@ -68,7 +68,7 @@ Context:
                 {"role": "system", "content": "You are an assistant that recommends assessments based on context."},
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": 500,
+            "max_tokens": 1024,
             "temperature": 0.3,
         },
     )
