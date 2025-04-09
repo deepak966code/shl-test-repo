@@ -6,10 +6,10 @@ lxml==5.1.0
 spacy==3.7.2
 python-dotenv==1.0.1
 gunicorn==21.2.0
-docker
-faiss-cpu
-requests
-pandas
-numpy
-scikit-learn
-sentence_transformers
+
+# Additional libraries
+faiss-cpu==1.7.4
+pandas==2.2.1
+numpy==1.24.4
+scikit-learn==1.3.2
+sentence-transformers==2.2.2
