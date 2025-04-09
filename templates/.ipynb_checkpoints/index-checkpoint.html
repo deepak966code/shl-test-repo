@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SHL Assessment Finder</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+        }
+
+        body {
+            padding: 40px;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        #queryForm {
+            margin-bottom: 30px;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            font-size: 16px;
+            width: 350px;
+        }
+
+        button {
+            padding: 10px 18px;
+            font-size: 14px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        #loading {
+            margin-top: 10px;
+            font-style: italic;
+            color: #555;
+        }
+
+        #responseArea {
+            margin-top: 40px;
+        }
+
+        #resultsContainer {
+            margin-top: 20px;
+            background: #fff;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        #resultsTable {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 900px;
+        }
+
+        table, th, td {
+            border: 1px solid #ccc;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f0f0f0;
+        }
+
+        td a {
+            color: #007BFF;
+            text-decoration: none;
+        }
+
+        td a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h2>SHL Assessment Finder</h2>
+
+    <div id="queryForm">
+        <input type="text" id="user_query" placeholder="Enter your job-related query" required />
+        <button type="button" id="submitBtn" onclick="submitQuery()">Submit</button>
+        <div id="loading" style="display: none;">Loading...</div>
+    </div>
+
+    <div id="responseArea"></div>
+
+    <script>
+        function submitQuery() {
+            const query = document.getElementById('user_query').value.trim();
+            const submitBtn = document.getElementById('submitBtn');
+            const loadingIndicator = document.getElementById('loading');
+            const responseArea = document.getElementById('responseArea');
+
+            if (!query) {
+                alert("Please enter a query");
+                return;
+            }
+
+            submitBtn.disabled = true;
+            loadingIndicator.style.display = 'block';
+            responseArea.innerHTML = "";
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/recommend', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+            xhr.onload = function () {
+                submitBtn.disabled = false;
+                loadingIndicator.style.display = 'none';
+
+                try {
+                    const res = JSON.parse(xhr.responseText);
+                    if (res.success) {
+                        responseArea.innerHTML = `
+                            <h3>Top Matching Assessments</h3>
+                            <div id="resultsContainer">
+                                <div id="resultsTable">${res.response}</div>
+                            </div>
+                        `;
+                    } else {
+                        responseArea.innerHTML = `<span style="color: red;">${res.response}</span>`;
+                    }
+                } catch (e) {
+                    responseArea.innerHTML = "⚠️ Failed to parse response.";
+                }
+            };
+
+            xhr.onerror = function () {
+                submitBtn.disabled = false;
+                loadingIndicator.style.display = 'none';
+                responseArea.innerHTML = "⚠️ Request failed.";
+            };
+
+            xhr.send('user_query=' + encodeURIComponent(query));
+        }
+    </script>
+</body>
+</html>

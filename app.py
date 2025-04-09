@@ -1,62 +1,153 @@
-import streamlit as st
-from utils.faiss_utils import init_faiss, store_results_to_faiss, query_faiss
-from agents.query_analysis import analyze_query_with_mistral
-from utils.response_generator import generate_response
+from flask import Flask, request, render_template, jsonify
 import os
+import subprocess
+import traceback
+from utils.faiss_utils import store_results_to_faiss, query_faiss
+from utils.response_generator import generate_response
+from agents.query_analysis import analyze_query_with_mistral
 
-MISTRAL_API_KEY = st.secrets["MISTRAL_API_KEY"]
+app = Flask(__name__)
 
-st.set_page_config(page_title="🧠 SHL Assessment Recommender", layout="wide")
-st.title("🧠 SHL Assessment Recommender")
+@app.route("/", methods=["GET"])
+def home():
+    return render_template("index.html")
 
-# Initialize session
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "healthy"}), 200
 
-if "user_query" not in st.session_state:
-    st.session_state.user_query = ""
+@app.route("/recommend", methods=["POST"])
+def process_query():
+    try:
+        user_query = request.form.get("user_query", "").strip()
+        print(f"Received query: {user_query}")
 
-# Display history
-for chat in st.session_state.chat_history:
-    with st.chat_message("user"):
-        st.write(chat["user"])
-    with st.chat_message("assistant"):
-        st.write(chat["bot"])
-
-# Input UI
-col1, col2 = st.columns([8, 1])
-with col1:
-    user_query = st.text_input("💬 Enter a job description or query:", key="query_input")
-
-if st.button("🚀 Submit Query"):
-    if user_query.strip():
-        st.session_state.user_query = user_query
-        st.write("🔍 Analyzing your query...")
-
-        # ✅ Step 1: Extract intent from LLM
+        # Step 1: Analyze query
         analysis = analyze_query_with_mistral(user_query)
+        print(analysis, "********")
 
-        # ✅ Step 2: Based on analysis, run crawl scripts conditionally
-        if analysis["keywords"]:
-            os.system(f"python scripts/first.py {' '.join(analysis['keywords'])}")
+        # Step 2: Run first.py if keywords exist
+        if analysis.get("keywords"):
+            print(f"Running first.py with keywords: {analysis['keywords']}")
+            subprocess.run(
+                ["python", "scripts/first.py", *analysis["keywords"]],
+                check=False,
+                timeout=600
+            )
 
-        if any([analysis["job_family"], analysis["job_level"], analysis["industry"], analysis["language"]]):
-            os.system(f"python scripts/second.py --family '{analysis['job_family']}' --level '{analysis['job_level']}' --industry '{analysis['industry']}' --language '{analysis['language']}'")
+        # Step 3: Run second.py if job details exist
+        if any([analysis.get("job_family"), analysis.get("job_level"), analysis.get("industry"), analysis.get("language")]):
+            print("Running second.py with job details...")
+            second_args = ["python", "scripts/second.py"]
 
-        if analysis["job_category"]:
-            os.system(f"python scripts/third.py --category '{analysis['job_category']}'")
+            if analysis.get("job_family"):
+                second_args += ["--job_family", analysis["job_family"][0]]
+            if analysis.get("job_level"):
+                second_args += ["--job_level", analysis["job_level"][0]]
+            if analysis.get("industry"):
+                second_args += ["--industry", analysis["industry"][0]]
+            if analysis.get("language"):
+                second_args += ["--language", analysis["language"][0]]
 
-        # ✅ Step 3: Store crawled CSVs to FAISS
+            subprocess.run(second_args, check=True)
+
+            # Step 4: Run third.py if category exists
+            if analysis.get("job_category"):
+                print("Running third.py with category...")
+                subprocess.run([
+                    "python", "scripts/third.py",
+                    "--job_category", analysis["job_category"][0]
+                ], check=True)
+
+        # Step 5: Store in FAISS
+        print("Storing results to FAISS...")
         store_results_to_faiss()
 
-        # ✅ Step 4: Query FAISS for results
+        # Step 6: Query FAISS
+        print("Querying FAISS...")
+        results = query_faiss(user_query)
+        print(f"FAISS Results: {results}")
+
+        # Step 7: Generate response
+        print("Generating final response...")
+        response = generate_response(user_query, results)
+        print("Response generated.")
+
+        return jsonify({"success": True, "response": response})
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "response": f"Error: {str(e)}"})
+
+@app.route("/api/recommend", methods=["POST"])
+def api_recommend():
+    try:
+        data = request.get_json()
+        user_query = data.get("query", "").strip()
+
+        if not user_query:
+            return jsonify({"success": False, "error": "Query is required"}), 400
+
+        print(f"API received query: {user_query}")
+
+        # Step 1: Analyze query
+        analysis = analyze_query_with_mistral(user_query)
+        print(analysis, "<<< API Analysis")
+
+        # Step 2: Run first.py if keywords exist
+        if analysis.get("keywords"):
+            subprocess.run(
+                ["python", "scripts/first.py", *analysis["keywords"]],
+                check=False,
+                timeout=600
+            )
+
+        # Step 3: Run second.py if job details exist
+        if any([analysis.get("job_family"), analysis.get("job_level"), analysis.get("industry"), analysis.get("language")]):
+            second_args = ["python", "scripts/second.py"]
+            if analysis.get("job_family"):
+                second_args += ["--job_family", analysis["job_family"][0]]
+            if analysis.get("job_level"):
+                second_args += ["--job_level", analysis["job_level"][0]]
+            if analysis.get("industry"):
+                second_args += ["--industry", analysis["industry"][0]]
+            if analysis.get("language"):
+                second_args += ["--language", analysis["language"][0]]
+
+            subprocess.run(second_args, check=True)
+
+        # Step 4: Run third.py if job category exists
+        if analysis.get("job_category"):
+            subprocess.run([
+                "python", "scripts/third.py",
+                "--job_category", analysis["job_category"][0]
+            ], check=True)
+
+        # Step 5: Store to FAISS
+        store_results_to_faiss()
+
+        # Step 6: Query FAISS
         results = query_faiss(user_query)
 
-        # ✅ Step 5: Use LLM to generate table response
-        response = generate_response(user_query, results)
+        # Step 7: Format JSON output
+        formatted = []
+        for r in results:
+            formatted.append({
+                "assessment_name": r[0] or "nil",
+                "link": r[1] or "nil",
+                "remote_testing": r[2] or "nil",
+                "adaptive_irt": r[3] or "nil",
+                "test_type": r[4] or "nil",
+                "duration": r[5] or "nil",
+                "description": r[6] or "nil"
+            })
 
-        # ✅ Save to chat history
-        st.session_state.chat_history.append({"user": user_query, "bot": response})
+        return jsonify({"success": True, "results": formatted}), 200
 
-        st.write(response)
-        st.session_state.user_query = ""
+    except Exception as e:
+        print("❌ API Error:", e)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)

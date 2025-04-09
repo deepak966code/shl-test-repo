@@ -1,194 +1,180 @@
-'''
-from playwright.sync_api import sync_playwright
-import csv
-import time
-
-# ✅ Helper to select an item from dropdowns if value is provided
-def select_dropdown(page, dropdown_holder_id, option_text):
-    if not option_text:
-        return  # Skip if no input was given
-
-    dropdown_trigger = f"#{dropdown_holder_id} .choices"
-    page.click(dropdown_trigger)
-    page.wait_for_selector(f"#{dropdown_holder_id} .choices__list--dropdown", timeout=3000)
-
-    option_selector = f'#{dropdown_holder_id} .choices__item--selectable'
-    options = page.query_selector_all(option_selector)
-
-    for option in options:
-        if option.inner_text().strip().lower() == option_text.strip().lower():
-            option.click()
-            return
-
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_page()
-    page.goto("https://www.shl.com/solutions/products/product-catalog/", wait_until="domcontentloaded")
-
-    # ✅ Optional dropdown filters (set one or more)
-    job_family = "Safety"
-    job_level = None
-    industry = None
-    language = None
-
-    # Apply dropdown filters if given
-    select_dropdown(page, "Form_FilteringForm_job_family_Holder", job_family)
-    select_dropdown(page, "Form_FilteringForm_job_level_Holder", job_level)
-    select_dropdown(page, "Form_FilteringForm_industry_Holder", industry)
-    select_dropdown(page, "Form_FilteringForm_language_Holder", language)
-
-    # 🔍 Submit the form
-    page.click('#Form_FilteringForm_action_doFilteringForm')
-    time.sleep(2)
-
-    jobs = []
-
-    # 🔁 Pagination loop
-    while True:
-        # Wait and collect job entries
-        page.wait_for_selector('div.js-target-table-wrapper table tbody tr', timeout=5000)
-        rows = page.query_selector_all('table tbody tr')
-
-        for row in rows:
-            title_el = row.query_selector('td a')
-            title = title_el.inner_text().strip() if title_el else ''
-            link = title_el.get_attribute('href') if title_el else ''
-
-            cells = row.query_selector_all('td')
-            remote_td = cells[1] if len(cells) > 1 else None
-            adaptive_td = cells[2] if len(cells) > 2 else None
-
-            remote = 'Yes' if remote_td and remote_td.query_selector('span.catalogue__circle.-yes') else 'No'
-            adaptive = 'Yes' if adaptive_td and adaptive_td.query_selector('span.catalogue__circle.-yes') else 'No'
-
-            key_spans = row.query_selector_all('span.product-catalogue__key')
-            keys = ', '.join([span.inner_text().strip() for span in key_spans])
-
-            jobs.append({
-                'Job Title': title,
-                'Link': link,
-                'Remote Testing': remote,
-                'Adaptive/IRT': adaptive,
-                'Keys': keys
-            })
-
-        # Check if a next page exists
-        next_btn = page.query_selector('li.-arrow.-next a.pagination__arrow')
-        if next_btn:
-            next_href = next_btn.get_attribute('href')
-            full_url = "https://www.shl.com" + next_href
-            print(f"➡️ Navigating to next page: {full_url}")
-            page.goto(full_url, wait_until='domcontentloaded')
-            time.sleep(2)
-        else:
-            print("✅ Reached last page.")
-            break
-
-    browser.close()
-
-    # 💾 Save all results to CSV
-    with open('results2026.csv', 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=['Job Title', 'Link', 'Remote Testing', 'Adaptive/IRT', 'Keys'])
-        writer.writeheader()
-        writer.writerows(jobs)
-
-    print(f"✅ Scraping finished. {len(jobs)} jobs saved to results2025.csv")
-'''
 import argparse
 import csv
 import os
 import time
-from playwright.sync_api import sync_playwright
+import traceback
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
 
-# ✅ Helper to select an item from dropdowns if value is provided
-def select_dropdown(page, dropdown_holder_id, option_text):
+# 🔽 Dropdown selector for Choices.js
+def select_dropdown(driver, wait, holder_id, option_text):
+    print(f"➡️ Selecting {option_text} for {holder_id}")
     if not option_text:
+        print(f"⚠️ Skipping {holder_id} as no value provided")
         return
-    dropdown_trigger = f"#{dropdown_holder_id} .choices"
-    page.click(dropdown_trigger)
-    page.wait_for_selector(f"#{dropdown_holder_id} .choices__list--dropdown", timeout=3000)
-    options = page.query_selector_all(f'#{dropdown_holder_id} .choices__item--selectable')
-    for option in options:
-        if option.inner_text().strip().lower() == option_text.strip().lower():
-            option.click()
-            return
-
-# ✅ CLI Argument Parser
-parser = argparse.ArgumentParser(description="SHL Catalog Scraper with Filters")
-parser.add_argument("--job_family", help="Job Family filter (e.g. Safety)")
-parser.add_argument("--job_level", help="Job Level filter")
-parser.add_argument("--industry", help="Industry filter")
-parser.add_argument("--language", help="Language filter")
-parser.add_argument("--output", default="data/second.csv", help="CSV file path to save results")
-args = parser.parse_args()
-
-# ✅ Ensure output folder exists
-os.makedirs(os.path.dirname(args.output), exist_ok=True)
-
-jobs = []
-
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_page()
-    page.goto("https://www.shl.com/solutions/products/product-catalog/", wait_until="domcontentloaded")
-
-    # ✅ Apply filters
-    select_dropdown(page, "Form_FilteringForm_job_family_Holder", args.job_family)
-    select_dropdown(page, "Form_FilteringForm_job_level_Holder", args.job_level)
-    select_dropdown(page, "Form_FilteringForm_industry_Holder", args.industry)
-    select_dropdown(page, "Form_FilteringForm_language_Holder", args.language)
-
-    page.click('#Form_FilteringForm_action_doFilteringForm')
-    time.sleep(2)
-
-    # 🔁 Pagination loop
-    while True:
-        page.wait_for_selector('div.js-target-table-wrapper table tbody tr', timeout=5000)
-        rows = page.query_selector_all('table tbody tr')
-
-        for row in rows:
-            title_el = row.query_selector('td a')
-            title = title_el.inner_text().strip() if title_el else ''
-            link = title_el.get_attribute('href') if title_el else ''
-
-            cells = row.query_selector_all('td')
-            remote_td = cells[1] if len(cells) > 1 else None
-            adaptive_td = cells[2] if len(cells) > 2 else None
-
-            remote = 'Yes' if remote_td and remote_td.query_selector('span.catalogue__circle.-yes') else 'No'
-            adaptive = 'Yes' if adaptive_td and adaptive_td.query_selector('span.catalogue__circle.-yes') else 'No'
-            key_spans = row.query_selector_all('span.product-catalogue__key')
-            keys = ', '.join([span.inner_text().strip() for span in key_spans])
-
-            jobs.append({
-                'Job Title': title,
-                'Link': link,
-                'Remote Testing': remote,
-                'Adaptive/IRT': adaptive,
-                'Keys': keys
-            })
-
-        # ✅ Pagination handling
-        next_btn = page.query_selector('li.-arrow.-next a.pagination__arrow')
-        if next_btn:
-            next_href = next_btn.get_attribute('href')
-            if next_href:
-                next_url = "https://www.shl.com" + next_href
-                print(f"➡️ Going to next page: {next_url}")
-                page.goto(next_url, wait_until='domcontentloaded')
-                time.sleep(2)
-            else:
+    try:
+        container = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, f"#{holder_id} .choices")))
+        container.click()
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, f"#{holder_id} .choices__list--dropdown")))
+        options = driver.find_elements(By.CSS_SELECTOR, f"#{holder_id} .choices__item--selectable")
+        for option in options:
+            if option.text.strip().lower() == option_text.strip().lower():
+                option.click()
+                print(f"✅ Selected {option_text} in {holder_id}")
                 break
         else:
-            print("✅ Reached last page.")
-            break
+            print(f"❌ Option '{option_text}' not found in {holder_id}")
+    except Exception as e:
+        print(f"⚠️ Dropdown error in '{holder_id}': {e}")
 
-    browser.close()
+# 🧪 Extract additional details from test page
+def extract_details_from_page(driver, link):
+    duration = ""
+    description = ""
+    try:
+        print(f"🔗 Opening detail page: {link}")
+        driver.get(link)
 
-# ✅ Save to CSV
-with open(args.output, 'w', newline='', encoding='utf-8') as f:
-    writer = csv.DictWriter(f, fieldnames=['Job Title', 'Link', 'Remote Testing', 'Adaptive/IRT', 'Keys'])
-    writer.writeheader()
-    writer.writerows(jobs)
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        time.sleep(1.5)  # Give some time for JS to render content
 
-print(f"✅ Done. {len(jobs)} records saved to {args.output}")
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        # Duration
+        duration_para = soup.find('p', string=lambda t: t and 'Completion Time' in t)
+        if duration_para:
+            duration = ''.join(filter(str.isdigit, duration_para.text))
+            print(f"⏱ Duration found: {duration}")
+        else:
+            print("❌ Duration not found")
+
+        # Description
+        desc_header = soup.find('h4', string='Description')
+        if desc_header:
+            desc_p = desc_header.find_next_sibling("p")
+            if desc_p:
+                description = desc_p.get_text(separator=" ", strip=True)
+                print(f"📝 Description found")
+            else:
+                print("❌ Description paragraph not found")
+        else:
+            print("❌ Description header not found")
+
+    except Exception as e:
+        print(f"⚠️ Failed to extract details from {link}: {e}")
+    return duration, description
+
+
+def main():
+    try:
+        parser = argparse.ArgumentParser(description="SHL Catalog Scraper with Filters (Selenium)")
+        parser.add_argument("--job_family", help="Job Family filter (e.g. Safety)")
+        parser.add_argument("--job_level", help="Job Level filter")
+        parser.add_argument("--industry", help="Industry filter")
+        parser.add_argument("--language", help="Language filter")
+        parser.add_argument("--output", default="data/second.csv", help="CSV file path to save results")
+        args = parser.parse_args()
+
+        print(f"🟢 Running second.py with arguments:")
+        print(vars(args))
+
+        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+        jobs = []
+
+        # 🧭 Set up browsers
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
+
+        driver = webdriver.Chrome(options=chrome_options)
+        detail_driver = webdriver.Chrome(options=chrome_options)  # For detail page
+        wait = WebDriverWait(driver, 10)
+
+        driver.get("https://www.shl.com/solutions/products/product-catalog/")
+
+        # 🎯 Apply filters
+        select_dropdown(driver, wait, "Form_FilteringForm_job_family_Holder", args.job_family)
+        select_dropdown(driver, wait, "Form_FilteringForm_job_level_Holder", args.job_level)
+        select_dropdown(driver, wait, "Form_FilteringForm_industry_Holder", args.industry)
+        select_dropdown(driver, wait, "Form_FilteringForm_language_Holder", args.language)
+
+        print("🔍 Applying filters and scraping data...")
+        search_btn = driver.find_element(By.ID, "Form_FilteringForm_action_doFilteringForm")
+        driver.execute_script("arguments[0].click();", search_btn)
+        time.sleep(2)
+
+        while True:
+            wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div.js-target-table-wrapper table tbody tr")))
+            rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
+            print(f"📄 Found {len(rows)} rows on this page")
+
+            for row in rows:
+                try:
+                    cells = row.find_elements(By.TAG_NAME, "td")
+                    title_el = cells[0].find_element(By.TAG_NAME, "a") if cells else None
+                    title = title_el.text.strip() if title_el else ''
+                    link = title_el.get_attribute("href") if title_el else ''
+                except Exception as e:
+                    print(f"⚠️ Row parsing error: {e}")
+                    title, link = '', ''
+
+                remote = 'Yes' if len(cells) > 1 and cells[1].find_elements(By.CSS_SELECTOR, 'span.catalogue__circle.-yes') else 'No'
+                adaptive = 'Yes' if len(cells) > 2 and cells[2].find_elements(By.CSS_SELECTOR, 'span.catalogue__circle.-yes') else 'No'
+                key_spans = row.find_elements(By.CSS_SELECTOR, 'span.product-catalogue__key')
+                keys = ', '.join([span.text.strip() for span in key_spans])
+
+                # 🆕 Extract details from detail page
+                duration, description = extract_details_from_page(detail_driver, link)
+
+                jobs.append({
+                    'Job Title': title,
+                    'Link': link,
+                    'Remote Testing': remote,
+                    'Adaptive/IRT': adaptive,
+                    'Test Type': keys,
+                    'Duration': duration,
+                    'Description': description
+                })
+
+            try:
+                next_btn = driver.find_element(By.CSS_SELECTOR, "li.-arrow.-next a.pagination__arrow")
+                next_href = next_btn.get_attribute("href")
+                if next_href:
+                    next_url = "https://www.shl.com" + next_href
+                    print(f"➡️ Next page: {next_url}")
+                    driver.get(next_url)
+                    time.sleep(2)
+                else:
+                    break
+            except:
+                print("✅ Last page reached.")
+                break
+
+        driver.quit()
+        detail_driver.quit()
+
+        # 💾 Save to CSV
+        with open(args.output, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                'Job Title', 'Link', 'Remote Testing', 'Adaptive/IRT', 'Test Type', 'Duration', 'Description'
+            ])
+            writer.writeheader()
+            writer.writerows(jobs)
+
+        print(f"✅ Done. {len(jobs)} results saved to {args.output}")
+
+    except Exception as e:
+        print("❌ An unexpected error occurred in second.py:")
+        print(e)
+        traceback.print_exc()
+        exit(1)
+
+if __name__ == "__main__":
+    main()

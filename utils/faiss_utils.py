@@ -16,7 +16,11 @@ def store_results_to_faiss():
     for file in glob.glob("data/*.csv"):
         df = pd.read_csv(file)
         for _, row in df.iterrows():
-            text = f"{row['Job Title']} | Remote: {row['Remote Testing']} | Adaptive: {row['Adaptive/IRT']} | Keys: {row.get('Keys', '')}"
+            text = (
+                f"{row['Job Title']} | Remote: {row['Remote Testing']} | Adaptive: {row['Adaptive/IRT']} | "
+                f"Duration: {row.get('Duration', '')} | Test Type: {row.get('Test Type', row.get('Keys', ''))} | "
+                f"Description: {row.get('Description', '')}"
+            )
             embedding = model.encode([text])
             faiss_index.add(embedding)
             stored_texts.append((text, row.get("Link", "#")))
