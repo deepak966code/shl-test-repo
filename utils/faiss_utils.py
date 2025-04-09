@@ -4,7 +4,9 @@ from sentence_transformers import SentenceTransformer
 import os
 import glob
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+#model = SentenceTransformer("all-MiniLM-L6-v2")
+model = SentenceTransformer("./model")
+
 faiss_index = faiss.IndexFlatL2(384)
 stored_texts = []
 
