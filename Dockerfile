@@ -22,8 +22,12 @@ RUN pip install --upgrade pip \
 RUN python -m spacy download en_core_web_sm
 # Set environment variables (for Flask)
 ENV FLASK_APP=app.py
-ENV FLASK_ENV=development
+
 ENV PYTHONUNBUFFERED=1
+
+# With:
+ENV FLASK_DEBUG=1
+ENV PORT=5000  # Needed by Render
 
 # Expose the port Flask will run on
 EXPOSE 5000
