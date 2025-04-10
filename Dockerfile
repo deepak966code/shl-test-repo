@@ -24,12 +24,10 @@ RUN pip install --upgrade pip \
 
 # Set environment variables
 ENV FLASK_APP=app.py
-ENV FLASK_DEBUG=1
+ENV FLASK_DEBUG=0
 ENV PYTHONUNBUFFERED=1
-ENV PORT=10000
-
-# Expose the port Flask will run on
-EXPOSE 10000
+ARG PORT=5000
+EXPOSE ${PORT}
 
 CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:${PORT}", "--timeout", "360"]
 
