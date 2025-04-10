@@ -46,19 +46,29 @@ args = parser.parse_args()
 # ✅ Ensure output directory exists
 os.makedirs("data", exist_ok=True)
 
+# Set path to chromedriver
+chrome_driver_path = "C:/path/to/chromedriver.exe"
+
+# Set up Chrome options
 chrome_options = Options()
-chrome_options.binary_location = "/usr/bin/chromium"
-chrome_options.add_argument("--headless")
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--disable-gpu")
-chrome_options.add_argument("--remote-debugging-port=9222")
+chrome_options.add_argument("start-maximized")  # open Browser in maximized mode
+chrome_options.add_argument("disable-infobars")  # disabling infobars
+chrome_options.add_argument("--disable-extensions")  # disabling extensions
+chrome_options.add_argument("--disable-gpu")  # applicable to windows OS only
+chrome_options.add_argument("--disable-dev-shm-usage")  # overcome limited resource problems
+chrome_options.add_argument("--no-sandbox")  # Bypass OS security model
 
+# Create Service object for chromedriver
+chrome_service = Service(chrome_driver_path)
 
-chrome_service = Service("/usr/bin/chromedriver")
+# Initialize the WebDriver
 driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-detail_driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
+# Open URL
+driver.get("https://google.com")
+
+# If you need another driver with the same configuration:
+detail_driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
 wait = WebDriverWait(driver, 10)
 
