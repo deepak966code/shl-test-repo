@@ -26,8 +26,5 @@ RUN pip install --upgrade pip \
 ENV FLASK_APP=app.py
 ENV FLASK_DEBUG=0
 ENV PYTHONUNBUFFERED=1
-ARG PORT=5000
-EXPOSE ${PORT}
 
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:${PORT}", "--timeout", "360"]
-
+.0.0.0:$PORT --timeout 360
