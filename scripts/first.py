@@ -45,15 +45,17 @@ args = parser.parse_args()
 # ✅ Ensure output directory exists
 os.makedirs("data", exist_ok=True)
 
-# ✅ Configure headless browser
 chrome_options = Options()
+chrome_options.binary_location = "/usr/bin/chromium"
 chrome_options.add_argument("--headless")
-chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--disable-gpu")
+chrome_options.add_argument("--remote-debugging-port=9222")
 
-# ✅ Initialize both drivers
-driver = webdriver.Chrome(options=chrome_options)
-detail_driver = webdriver.Chrome(options=chrome_options)
+driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
+detail_driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
+
 wait = WebDriverWait(driver, 10)
 
 all_jobs = []
