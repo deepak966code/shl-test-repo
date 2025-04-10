@@ -103,8 +103,12 @@ def main():
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--remote-debugging-port=9222")
         
-        driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
-        detail_driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
+        from selenium.webdriver.chrome.service import Service
+
+        chrome_service = Service("/usr/bin/chromedriver")
+        driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+        detail_driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+
 
         wait = WebDriverWait(driver, 10)
 
