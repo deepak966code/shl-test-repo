@@ -10,6 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from selenium.webdriver.chrome.service import Service
 # ✅ Extract test duration & description from detail page
 def extract_details_from_page(driver, link):
     duration = ""
@@ -53,8 +54,11 @@ chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--remote-debugging-port=9222")
 
-driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
-detail_driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
+
+chrome_service = Service("/usr/bin/chromedriver")
+driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+detail_driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+
 
 wait = WebDriverWait(driver, 10)
 
