@@ -88,13 +88,24 @@ def main():
         jobs = []
 
         # 🧭 Set up browsers
-        chrome_options = Options()
+        '''chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
 
         driver = webdriver.Chrome(options=chrome_options)
-        detail_driver = webdriver.Chrome(options=chrome_options)  # For detail page
+        detail_driver = webdriver.Chrome(options=chrome_options)  # For detail page'''
+        chrome_options = Options()
+        chrome_options.binary_location = "/usr/bin/chromium"
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        
+        driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
+        detail_driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
+
         wait = WebDriverWait(driver, 10)
 
         driver.get("https://www.shl.com/solutions/products/product-catalog/")
